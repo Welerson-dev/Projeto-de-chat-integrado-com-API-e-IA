@@ -1,5 +1,6 @@
 import { ixc, IxcCliente, nomeExibicaoCliente } from "../ixc/client";
 import { gemini } from "../ai/gemini";
+import { PLANOS_CONTEXTO } from "../data/planos";
 
 // ---------------------------------------------------------------------------
 // Tipos
@@ -156,15 +157,8 @@ async function handleSolicitacao(s: Session, text: string): Promise<ChatResponse
     return handleBoleto(s, nome);
   }
 
-  if (t === "3" || t.startsWith("3 -") || /comercial|plano|contratar|preço|preco/.test(t)) {
-    s.state = "encaminhado";
-    return {
-      messages: [
-        { type: "text", text: `Entendi! Vou encaminhar você para o nosso setor Comercial, ${nome}. Um atendente irá apresentar os planos disponíveis. 😊` },
-        { type: "end", text: "Atendente Comercial irá responder em instantes." },
-      ],
-      state: s.state,
-    };
+  if (t === "3" || t.startsWith("3 -") || /comercial|plano|contratar|preço|preco|valor|quanto custa|assinatura|upgrade|internet nova/.test(t)) {
+    return handleComercial(s, nome, text);
   }
 
   // Mensagem livre → Gemini classifica
@@ -197,14 +191,7 @@ async function handleSolicitacao(s: Session, text: string): Promise<ChatResponse
   }
 
   if (result.intent === "comercial") {
-    s.state = "encaminhado";
-    return {
-      messages: [
-        { type: "text", text: `Entendi! Vou encaminhar você para o nosso setor Comercial, ${nome}. Um atendente irá apresentar os planos disponíveis. 😊` },
-        { type: "end", text: "Atendente Comercial irá responder em instantes." },
-      ],
-      state: s.state,
-    };
+    return handleComercial(s, nome, text);
   }
 
   // Intenção não identificada → Gemini tenta responder naturalmente
@@ -239,6 +226,57 @@ async function handleSolicitacao(s: Session, text: string): Promise<ChatResponse
   }
 }
 
+// ---------------------------------------------------------------------------
+// 2b) Comercial: IA responde com dados reais dos planos
+// ---------------------------------------------------------------------------
+
+async function handleComercial(s: Session, nome: string, text: string): Promise<ChatResponse> {
+  // Verifica se o cliente quer CONTRATAR (vs só consultar preços)
+  const querContratar = /contratar|quero|assinar|fechar|solicitar|cadastrar|instalar/.test(text.toLowerCase());
+
+  if (querContratar) {
+    s.state = "encaminhado";
+    return {
+      messages: [
+        {
+          type: "text",
+          text: `Ótimo, ${nome}! Vou encaminhar você para nosso setor Comercial. Um consultor irá apresentar as melhores opções e confirmar a disponibilidade na sua região. 😊`,
+        },
+        { type: "end", text: "Atendente Comercial irá responder em instantes." },
+      ],
+      state: s.state,
+    };
+  }
+
+  // Consulta de preços/planos → Gemini responde com os dados reais do Manual ADM
+  try {
+    const aiReply = await gemini.reply(
+      `Você é o assistente virtual da DBS TELECOM. O cliente está perguntando sobre planos e preços.
+      Use SOMENTE as informações abaixo para responder. Seja objetivo e apresente os planos relevantes.
+      Ao final, pergunte se o cliente deseja contratar ou tem dúvidas.
+
+      ${PLANOS_CONTEXTO}`,
+      text,
+    );
+    return {
+      messages: [
+        { type: "text", text: aiReply },
+      ],
+      state: s.state,
+    };
+  } catch {
+    // Fallback: exibe os planos diretamente
+    return {
+      messages: [
+        {
+          type: "text",
+          text: `Aqui estão nossos planos disponíveis, ${nome}:\n\n🌐 *PLANOS URBANOS:*\n• SEJA DBS 400MB — R$ 89,90/mês\n• ESSENCIAL DBS 600MB — R$ 109,90/mês\n• IDEAL DBS 500MB — R$ 119,90/mês\n• ENTRETENIMENTO DBS 800MB — R$ 159,90/mês\n• HARD DBS 1GB — R$ 139,90/mês\n\n⚡ *PLANOS WI-FI 6:*\n• 500MB — R$ 119,90/mês\n• 600MB — R$ 129,90/mês\n• 800MB — R$ 159,90/mês\n• 1GB — R$ 189,90/mês\n(Ponto adicional: R$ 19,90)\n\nDeseja contratar algum plano ou tem alguma dúvida?`,
+        },
+      ],
+      state: s.state,
+    };
+  }
+}
 
 // ---------------------------------------------------------------------------
 // 3) Financeiro: busca boleto na IXC
