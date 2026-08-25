@@ -3,7 +3,7 @@ import cors from "cors";
 import { config } from "./config";
 import { chatRouter } from "./routes/chat";
 import { boletoRouter } from "./routes/boleto";
-import { listarDemandas } from "./flows/session";
+
 
 /**
  * MOTIVO: separar a criação do app Express do `listen()` permite que os
@@ -38,9 +38,7 @@ export function createApp() {
   app.use("/api/chat", chatRouter);
   app.use("/api/boleto", boletoRouter);
 
-  app.get("/api/demandas", (_req: Request, res: Response) => {
-    res.json(listarDemandas());
-  });
+
 
   app.get("/health", (_req: Request, res: Response) => {
     res.json({ ok: true });
