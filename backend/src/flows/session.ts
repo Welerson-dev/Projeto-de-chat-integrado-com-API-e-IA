@@ -2,10 +2,6 @@ import { ixc, IxcCliente, nomeExibicaoCliente } from "../ixc/client";
 import { gemini } from "../ai/gemini";
 import { PLANOS_CONTEXTO } from "../data/planos";
 
-// ---------------------------------------------------------------------------
-// Tipos
-// ---------------------------------------------------------------------------
-
 export type ChatMessage =
   | { type: "text"; text: string }
   | { type: "boleto"; text: string; boletoId?: string; pdfUrl?: string; linhaDigitavel?: string }
@@ -28,10 +24,6 @@ interface Session {
   lastActivity: number;
 }
 
-// ---------------------------------------------------------------------------
-// Sessões em memória
-// ---------------------------------------------------------------------------
-
 const sessions = new Map<string, Session>();
 const SESSION_TIMEOUT_MS = 10 * 60 * 1000;
 
@@ -46,10 +38,6 @@ function getSession(id: string): Session {
   return s;
 }
 
-// ---------------------------------------------------------------------------
-// Utilitário: normalizar telefone
-// ---------------------------------------------------------------------------
-
 function normalizarTelefone(value: string): string | null {
   let digits = value.replace(/\D/g, "");
   if ((digits.length === 12 || digits.length === 13) && digits.startsWith("55")) {
@@ -57,10 +45,6 @@ function normalizarTelefone(value: string): string | null {
   }
   return digits.length === 10 || digits.length === 11 ? digits : null;
 }
-
-// ---------------------------------------------------------------------------
-// Fluxo principal
-// ---------------------------------------------------------------------------
 
 export async function handleMessage(sessionId: string, message: string): Promise<ChatResponse> {
   const s = getSession(sessionId);
@@ -70,17 +54,12 @@ export async function handleMessage(sessionId: string, message: string): Promise
   if (s.state === "aguardando_solicitacao") return handleSolicitacao(s, text);
   if (s.state === "checklist") return handleChecklist(s, text);
 
-  // encaminhado: reinicia sessão
   s.state = "awaiting_phone";
   s.cliente = undefined;
   s.contrato = undefined;
   s.checklistStep = 0;
   return { messages: [{ type: "text", text: "Sessão encerrada. Para um novo atendimento, informe seu telefone com DDD." }], state: s.state };
 }
-
-// ---------------------------------------------------------------------------
-// 1) Identificação pelo telefone
-// ---------------------------------------------------------------------------
 
 async function handlePhone(s: Session, text: string): Promise<ChatResponse> {
   const telefone = normalizarTelefone(text);
@@ -108,15 +87,13 @@ async function handlePhone(s: Session, text: string): Promise<ChatResponse> {
     };
   }
 
-  // Cliente encontrado!
   s.cliente = cliente;
 
-  // Busca contrato ativo
   try {
     const contratos = await ixc.findContratos(cliente.id as number);
     if (contratos.length > 0) s.contrato = { id: contratos[0].id as number };
   } catch {
-    // sem contrato, não bloqueia
+    // sem contrato, não bloqueia o fluxo
   }
 
   const nome = nomeExibicaoCliente(cliente).split(" ")[0] || "cliente";
@@ -130,15 +107,10 @@ async function handlePhone(s: Session, text: string): Promise<ChatResponse> {
   };
 }
 
-// ---------------------------------------------------------------------------
-// 2) Interpretar solicitação com Gemini
-// ---------------------------------------------------------------------------
-
 async function handleSolicitacao(s: Session, text: string): Promise<ChatResponse> {
   const t = text.trim().toLowerCase();
   const nome = nomeExibicaoCliente(s.cliente ?? {}).split(" ")[0] || "cliente";
 
-  // Atalhos numéricos do menu (quando o usuário toca nos botões)
   if (t === "1" || t.startsWith("1 -") || /suporte|técnico|tecnico/.test(t)) {
     s.state = "checklist";
     s.checklistStep = 0;
@@ -161,7 +133,6 @@ async function handleSolicitacao(s: Session, text: string): Promise<ChatResponse
     return handleComercial(s, nome, text);
   }
 
-  // Mensagem livre → Gemini classifica
   let result: { intent: string; flow: string };
   try {
     result = await gemini.classify(text);
@@ -194,8 +165,6 @@ async function handleSolicitacao(s: Session, text: string): Promise<ChatResponse
     return handleComercial(s, nome, text);
   }
 
-  // Intenção não identificada → Gemini tenta responder naturalmente
-  // e oferece o menu como fallback uma única vez
   try {
     const aiReply = await gemini.reply(
       "O cliente está conversando com o assistente virtual da DBS TELECOM. Você pode ajudar com suporte técnico, financeiro (boleto) ou comercial (planos). Se não conseguir ajudar, oriente o cliente a escolher uma das opções.",
@@ -226,12 +195,7 @@ async function handleSolicitacao(s: Session, text: string): Promise<ChatResponse
   }
 }
 
-// ---------------------------------------------------------------------------
-// 2b) Comercial: IA responde com dados reais dos planos
-// ---------------------------------------------------------------------------
-
 async function handleComercial(s: Session, nome: string, text: string): Promise<ChatResponse> {
-  // Verifica se o cliente quer CONTRATAR (vs só consultar preços)
   const querContratar = /contratar|quero|assinar|fechar|solicitar|cadastrar|instalar/.test(text.toLowerCase());
 
   if (querContratar) {
@@ -248,7 +212,6 @@ async function handleComercial(s: Session, nome: string, text: string): Promise<
     };
   }
 
-  // Consulta de preços/planos → Gemini responde com os dados reais do Manual ADM
   try {
     const aiReply = await gemini.reply(
       `Você é o assistente virtual da DBS TELECOM. O cliente está perguntando sobre planos e preços.
@@ -259,18 +222,15 @@ async function handleComercial(s: Session, nome: string, text: string): Promise<
       text,
     );
     return {
-      messages: [
-        { type: "text", text: aiReply },
-      ],
+      messages: [{ type: "text", text: aiReply }],
       state: s.state,
     };
   } catch {
-    // Fallback: exibe os planos diretamente
     return {
       messages: [
         {
           type: "text",
-          text: `Aqui estão nossos planos disponíveis, ${nome}:\n\n🌐 *PLANOS URBANOS:*\n• SEJA DBS 400MB — R$ 89,90/mês\n• ESSENCIAL DBS 600MB — R$ 109,90/mês\n• IDEAL DBS 500MB — R$ 119,90/mês\n• ENTRETENIMENTO DBS 800MB — R$ 159,90/mês\n• HARD DBS 1GB — R$ 139,90/mês\n\n⚡ *PLANOS WI-FI 6:*\n• 500MB — R$ 119,90/mês\n• 600MB — R$ 129,90/mês\n• 800MB — R$ 159,90/mês\n• 1GB — R$ 189,90/mês\n(Ponto adicional: R$ 19,90)\n\nDeseja contratar algum plano ou tem alguma dúvida?`,
+          text: `Aqui estão nossos planos disponíveis, ${nome}:\n\n🌐 PLANOS URBANOS:\n• SEJA DBS 400MB — R$ 89,90/mês\n• ESSENCIAL DBS 600MB — R$ 109,90/mês\n• IDEAL DBS 500MB — R$ 119,90/mês\n• ENTRETENIMENTO DBS 800MB — R$ 159,90/mês\n• HARD DBS 1GB — R$ 139,90/mês\n\n⚡ PLANOS WI-FI 6:\n• 500MB — R$ 119,90/mês\n• 600MB — R$ 129,90/mês\n• 800MB — R$ 159,90/mês\n• 1GB — R$ 189,90/mês\n(Ponto adicional: R$ 19,90)\n\nDeseja contratar algum plano ou tem alguma dúvida?`,
         },
       ],
       state: s.state,
@@ -278,16 +238,12 @@ async function handleComercial(s: Session, nome: string, text: string): Promise<
   }
 }
 
-// ---------------------------------------------------------------------------
-// 3) Financeiro: busca boleto na IXC
-// ---------------------------------------------------------------------------
-
 async function handleBoleto(s: Session, nome: string): Promise<ChatResponse> {
   if (!s.contrato?.id) {
     s.state = "encaminhado";
     return {
       messages: [
-        { type: "text", text: "Não encontrei um contrato ativo para encaminhar o boleto. Vou acionar nosso time financeiro para te ajudar." },
+        { type: "text", text: "Não encontrei um contrato ativo. Vou acionar nosso time financeiro para te ajudar." },
         { type: "end", text: "Atendente Financeiro irá responder em instantes." },
       ],
       state: s.state,
@@ -319,7 +275,6 @@ async function handleBoleto(s: Session, nome: string): Promise<ChatResponse> {
   const fatura = faturas[0];
   const detalhes = `Encontrei seu boleto${fatura.valor ? ` no valor de R$ ${fatura.valor}` : ""}${fatura.data_vencimento ? ` com vencimento em ${fatura.data_vencimento}` : ""}`;
 
-  // Tenta gerar PDF
   try {
     const boleto = await ixc.getBoleto(Number(fatura.id));
     s.state = "aguardando_solicitacao";
@@ -335,7 +290,6 @@ async function handleBoleto(s: Session, nome: string): Promise<ChatResponse> {
       state: s.state,
     };
   } catch {
-    // Fallback: linha digitável direto da fatura
     if (fatura.linha_digitavel) {
       s.state = "aguardando_solicitacao";
       return {
@@ -354,17 +308,13 @@ async function handleBoleto(s: Session, nome: string): Promise<ChatResponse> {
     s.state = "encaminhado";
     return {
       messages: [
-        { type: "text", text: `Encontrei uma fatura pendente mas não consegui gerar o boleto agora. Vou acionar nosso time financeiro.` },
+        { type: "text", text: "Encontrei uma fatura pendente mas não consegui gerar o boleto agora. Vou acionar nosso time financeiro." },
         { type: "end", text: "Atendente Financeiro irá responder em instantes." },
       ],
       state: s.state,
     };
   }
 }
-
-// ---------------------------------------------------------------------------
-// 4) Checklist de suporte (internet lenta)
-// ---------------------------------------------------------------------------
 
 const PERGUNTAS = [
   "O problema acontece em todos os dispositivos conectados à sua rede (celular, TV, notebook)?",
@@ -376,18 +326,15 @@ const PERGUNTAS = [
 async function handleChecklist(s: Session, text: string): Promise<ChatResponse> {
   const step = s.checklistStep;
 
-  // Usa IA para interpretar sim/não
   let interpretado: "sim" | "nao" | "incerto" = "incerto";
   try {
     interpretado = await gemini.interpretarSimNao(PERGUNTAS[step], text);
   } catch {
-    // sem IA, tenta heurística simples
     const t = text.toLowerCase();
     if (/^(sim|ok|s|yes|pode|ja|já|feito|confirm|tudo|normal|continua)/.test(t)) interpretado = "sim";
     else if (/^(não|nao|n|no|nope|nada|resolv)/.test(t)) interpretado = "nao";
   }
 
-  // Última pergunta: "o problema continua?"
   if (step === 3) {
     if (interpretado === "nao") {
       s.state = "aguardando_solicitacao";
@@ -397,14 +344,9 @@ async function handleChecklist(s: Session, text: string): Promise<ChatResponse> 
         state: s.state,
       };
     }
-    if (interpretado === "sim") {
-      return escalate(s, "Suporte");
-    }
-    // incerto → encaminha de qualquer forma após esta última tentativa
     return escalate(s, "Suporte");
   }
 
-  // Passos 0, 1, 2
   if (interpretado === "incerto") {
     return {
       messages: [{ type: "text", text: `Não entendi bem. Pode responder com sim ou não? 🙂\n\n${PERGUNTAS[step]}` }],
@@ -412,7 +354,6 @@ async function handleChecklist(s: Session, text: string): Promise<ChatResponse> 
     };
   }
 
-  // Avança para próxima pergunta
   s.checklistStep += 1;
   return {
     messages: [{ type: "text", text: PERGUNTAS[s.checklistStep] }],

@@ -3,10 +3,6 @@ import { handleMessage } from "../flows/session";
 
 export const chatRouter = Router();
 
-/**
- * POST /api/chat
- * Body: { sessionId: string, message: string }
- */
 chatRouter.post("/", async (req: Request, res: Response) => {
   const { sessionId, message } = (req.body ?? {}) as { sessionId?: string; message?: string };
 
