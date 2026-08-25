@@ -28,9 +28,7 @@ IXC pelo telefone, sem login).
 2. O backend consulta a IXC (todas as colunas de telefone do cadastro).
 3. Número cadastrado → o bot responde **"Olá, {nome}! 👋 Sou o assistente
    virtual da DBS TELECOM..."** + menu.
-4. Teste negativo: digite um número não cadastrado → "Não localizei esse
-   número em nosso cadastro..." e ele pede novamente.
-
+  
 > Acontece por trás: `POST /api/chat` → `ixc.findClienteByTelefone()`.
 
 ## Etapa 3 — Menu e fluxos de atendimento
@@ -58,32 +56,8 @@ O menu mostra: `1 - Suporte técnico / 2 - Financeiro / 3 - Comercial / 0`.
 
 ---
 
-## Endpoints usados na demo (curl.exe)
 
-```powershell
-# Chat com identificação pelo telefone digitado no chat
-$body = '{"sessionId":"demo1","message":"(64) 99999-9999"}'
-Set-Content "$env:TEMP\chat.json" $body -Encoding utf8
-curl.exe -s -X POST http://localhost:3000/api/chat `
-  -H "Content-Type: application/json" -H "x-app-token: app_token_dbs_2026" `
-  --data-binary "@$env:TEMP\chat.json"
-
-# Variação: número vindo do canal (ex.: WhatsApp) → identificação automática
-$body = '{"sessionId":"demo2","message":"oi","phone":"64999999999"}'
-Set-Content "$env:TEMP\chat-canal.json" $body -Encoding utf8
-curl.exe -s -X POST http://localhost:3000/api/chat `
-  -H "Content-Type: application/json" -H "x-app-token: app_token_dbs_2026" `
-  --data-binary "@$env:TEMP\chat-canal.json"
-```
-
-## Clientes de teste no demo
-
-| ID    | Nome        | Documento         | Contrato         | Faturas abertas             |
-| ----- | ----------- | ----------------- | ---------------- | --------------------------- |
-| 2270  | Teste Wbrnet | CNPJ 03.824.222/0001-17 | Velocidade 300M (status A) | 145687–145690 (R$ 100,00, venc. 10/12) |
-| 2269  | Everaldo    | CPF 024.403.310-23 | —                | 145686 (sem boleto/avulsa)  |
-
-> ⚠️ Para a **identificação por telefone** (Etapa 2), o número usado precisa
+> ⚠️ Para a **identificação por telefone**  o número usado precisa
 > estar cadastrado na IXC (campos `telefone_celular`/`fone`/
 > `telefone_comercial`/`whatsapp`/`ramal` do cliente). Confira o número que
 > será usado antes da apresentação.

@@ -99,16 +99,6 @@ cd app && npx tsc --noEmit
 
 Todas as rotas `/api/*` exigem o header `x-app-token`.
 
-## Checklist de entrega
-
-| Item | Onde está |
-| ---- | --------- |
-| Código-fonte completo | `backend/` + `app/` + `docs/` (este repositório) |
-| MVP funcional do aplicativo | `app/` — Expo: tela inicial com "Iniciar chat" (sem login) + chat com o assistente |
-| Integração com a API da IXC | `backend/src/ixc/client.ts` + [docs/ixc-integration.md](docs/ixc-integration.md) — busca por telefone, contratos, faturas, boleto, desbloqueio |
-| Demonstração do fluxo de atendimento | [docs/demo-script.md](docs/demo-script.md) — roteiro etapa por etapa |
-| Instruções para instalação e execução | Seção [Configuração](#configuração--backend) deste README |
-| Documentação das integrações | [docs/](docs) — arquitetura, fluxos, API, IXC, demo |
 
 ## Documentação
 

@@ -136,6 +136,16 @@ export class IxcClient {
     );
   }
 
+  async findClienteById(idCliente: number): Promise<IxcCliente | null> {
+    const data = await this.requestWithListHeader<{ registros?: IxcCliente[] }>("/cliente", {
+      qtype: "cliente.id",
+      query: String(idCliente),
+      oper: "=",
+      rp: "1",
+    });
+    return (data.registros ?? [])[0] ?? null;
+  }
+
   async findContratos(idCliente: number): Promise<IxcContrato[]> {
     const data = await this.requestWithListHeader<{ registros?: IxcContrato[] }>("/cliente_contrato", {
       qtype: "cliente_contrato.id_cliente",

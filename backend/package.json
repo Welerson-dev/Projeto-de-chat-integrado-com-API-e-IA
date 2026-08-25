@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test": "npm run test:security",
     "test:security": "node --import tsx --test \"test/security/*.test.ts\"",
-    "ixc:telefones": "tsx scripts/telefones-cadastrados.ts"
+    "ixc:telefones": "tsx scripts/telefones-cadastrados.ts",
+    "ixc:cliente": "tsx scripts/buscar-cliente-id.ts"
   },
   "dependencies": {
     "cors": "^2.8.5",
